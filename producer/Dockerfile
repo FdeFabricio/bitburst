@@ -12,6 +12,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o producer .
 
 FROM alpine:latest
 
+RUN apk add tzdata
+
 WORKDIR /app
 
 COPY --from=builder /build/producer .
