@@ -1,0 +1,119 @@
+version: "3.9"
+
+services:
+
+  # RabbitMQ
+  message-broker:
+    image: rabbitmq:3-management
+    container_name: message-broker
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - ./data/rabbitmq/data/:/var/lib/rabbitmq
+      - ./data/rabbitmq/log/:/var/log/rabbitmq
+    restart: always
+    networks:
+      - network
+
+  # PostgreSQL database
+  db:
+    image: postgres
+    container_name: postgres
+    env_file:
+      - .env
+    ports:
+      - 5432:5432
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    restart: always
+    networks:
+      - network
+
+  # Producer
+  producer:
+    image: producer
+    container_name: producer
+    build:
+      context: .
+      dockerfile: producer/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - 9090:9090
+    restart: always
+    networks:
+      - network
+    depends_on:
+      - message-broker
+
+  # Tester
+  tester:
+    image: tester
+    container_name: tester
+    build:
+      context: .
+      dockerfile: tester/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - 9010:9010
+    restart: always
+    networks:
+      - network
+    depends_on:
+      - producer
+
+  # Consumer 1
+  consumer_1:
+    image: consumer
+    container_name: consumer_1
+    build:
+      context: .
+      dockerfile: consumer/Dockerfile
+    env_file:
+      - .env
+    environment:
+      MAX_CONSUMERS: 100
+    restart: always
+    networks:
+      - network
+    depends_on:
+      - tester
+
+  # Consumer 2
+  consumer_2:
+    image: consumer
+    container_name: consumer_2
+    build:
+      context: .
+      dockerfile: consumer/Dockerfile
+    env_file:
+      - .env
+    environment:
+      MAX_CONSUMERS: 300
+    restart: always
+    networks:
+      - network
+    depends_on:
+      - tester
+
+  # Routine to constantly delete old records from db
+  routine:
+    image: routine
+    container_name: routine
+    build:
+      context: .
+      dockerfile: routine/Dockerfile
+    env_file:
+      - .env
+    restart: always
+    networks:
+      - network
+    depends_on:
+      - db
+
+networks:
+  network:
+    driver: bridge
